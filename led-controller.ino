@@ -4,8 +4,10 @@
 #define SENSOR_SIG 7
 #define LED_PWM_PIN 5
 #define PWM_INTERVAL 5
-#define SWITCHING_DISTANCE 65
+#define SWITCHING_DISTANCE 75
 #define TIME_BEFORE_SWITCHING_OFF 300000 //5 min
+#define MAIN_LOOP_DELAY 150
+#define NUMBERS_OF_SWITCH_OFF_DELAYS TIME_BEFORE_SWITCHING_OFF/MAIN_LOOP_DELAY
 #define MAX_BRIGHT 255
 #define MIN_BRIGHT 0
 
@@ -13,6 +15,7 @@ Ultrasonic ultrasonic(SENSOR_SIG);
 volatile bool isSwitchedOn = false;
 volatile int filterOneSwitchOnCounter = 0;
 volatile int filterOneSwitchOffCounter = 0;
+volatile long switchOffDelaysCounter = 0;
  
 void setup() {
   pinMode(SENSOR_POWER_PIN, OUTPUT);
@@ -43,9 +46,9 @@ long measureDistance() {
     return distance;
 }
 
-bool filterOne(int *counter, bool flag) {
+bool filterOne(int *counter, bool flag, int numberOfCycles) {
   if (flag) {
-    if (++*counter < 7) {
+    if (++*counter < numberOfCycles) {
       return false;
     } else {
       return true;
@@ -58,21 +61,24 @@ bool filterOne(int *counter, bool flag) {
 
 void loop() {
   
-  if (filterOne(&filterOneSwitchOnCounter, measureDistance() < SWITCHING_DISTANCE)) {
+  if (filterOne(&filterOneSwitchOnCounter, measureDistance() < SWITCHING_DISTANCE, 5)) {
     if (!isSwitchedOn) {
       Serial.println("Switch on");
       switchOn();
       isSwitchedOn = true;
     }
+    switchOffDelaysCounter = 0;
   } 
   
-  if (filterOne(&filterOneSwitchOffCounter, measureDistance() >= SWITCHING_DISTANCE)) {
+  if (filterOne(&filterOneSwitchOffCounter, measureDistance() >= SWITCHING_DISTANCE, 5)) {
     if (isSwitchedOn) {
-      delay(TIME_BEFORE_SWITCHING_OFF);
-      Serial.println("Switch off");
-      switchOff();
-      isSwitchedOn = false;
+      if (++switchOffDelaysCounter == NUMBERS_OF_SWITCH_OFF_DELAYS) {
+        Serial.print("Switch off");
+        switchOff();
+        isSwitchedOn = false;
+        switchOffDelaysCounter = 0;
+      }
     }
   }  
-  delay(200);
+  delay(MAIN_LOOP_DELAY);
 }
